@@ -1,4 +1,4 @@
-This file has been removed as per project rules to avoid duplication.
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -26,6 +26,8 @@ try:
     matplotlib.use('TkAgg')
 except Exception:
     matplotlib.use('Agg')
+import warnings
+warnings.filterwarnings('ignore')
 import matplotlib.pyplot as plt
 
 
@@ -98,12 +100,12 @@ def build_mats_factory_m3(x,b,h,H,ky, A_f,D_f,D_w, alpha0, b_root, Ktheta_root_p
     ktheta_web_pair = 2.0*(4.0*Dw22/np.maximum(h,1e-12))
 
     def N_pair(Fi,Fpi,Fppi, Fj,Fpj,Fppj):
-        Ub = 0.5*np.trapz( Df11*(Fppi*Fppj)*int_s2
+        Ub = 0.5*np.trapezoid( Df11*(Fppi*Fppj)*int_s2
                           +2.0*(Df12+2.0*Df66)*(-ky**2)*(Fppi*Fj)*(b/2.0)
                           +Df22*(Fi*Fj)*int_syy2
                           +4.0*Df66*(Fpi*Fpj)*int_sy2, x)
-        Ue = np.trapz( ktheta_web_pair*(Fi*Fj)*(ky**2), x);  return Ub+Ue
-    def D_pair(Fpi,Fpj): return 0.5*np.trapz( alpha0*(Fpi*Fpj)*(b/2.0), x )
+        Ue = np.trapezoid( ktheta_web_pair*(Fi*Fj)*(ky**2), x);  return Ub+Ue
+    def D_pair(Fpi,Fpj): return 0.5*np.trapezoid( alpha0*(Fpi*Fpj)*(b/2.0), x )
 
     def build_ND(a,beta):
         F1,F1p,F1pp,F2,F2p,F2pp = basis_terms(a,beta,x)
@@ -142,6 +144,11 @@ def fast_ab(Ktheta_root_per_m, b_root, k_y_root, build_ND, kappa_scale, return_v
         j=int(np.argmin(arr))
         if 0<arr[j]<bestP:
             bestP=arr[j]; bestA=a; bestB=B[j]; bestv = vals[j][1]
+    
+    if bestA is None:
+        if return_vec: return np.inf, 0.0, 0.0, np.array([0.0,0.0])
+        else: return np.inf, 0.0, 0.0
+
     # refine (few iterations)
     for _ in range(8):
         Bs=np.linspace(max(1e-6,bestB*0.88),bestB*1.12,9)
@@ -180,8 +187,8 @@ def eval_m2_Pcr(vals, PPW=30, nx_min=801):
         expax=np.exp(-a*x); sinbx=np.sin(beta*x); cosbx=np.cos(beta*x)
         F=expax*(x*sinbx); Fp=expax*(sinbx + x*beta*cosbx - a*x*sinbx)
         Fpp=expax*(2*beta*cosbx - x*beta**2*sinbx - 2*a*(sinbx + x*beta*cosbx) + a**2*x*sinbx)
-        Ub=0.5*np.trapz(Df11*(Fpp**2)*int_s2 + 2*(Df12+2*Df66)*(-ky**2)*(Fpp*F)*(b/2.0) + Df22*(F**2)*int_syy2 + 4*Df66*(Fp**2)*int_sy2, x)
-        Ue=np.trapz(ktheta_web_pair*(F**2)*(ky**2), x); Den=0.5*np.trapz(alpha0*(Fp**2)*int_s2, x)
+        Ub=0.5*np.trapezoid(Df11*(Fpp**2)*int_s2 + 2*(Df12+2*Df66)*(-ky**2)*(Fpp*F)*(b/2.0) + Df22*(F**2)*int_syy2 + 4*Df66*(Fp**2)*int_sy2, x)
+        Ue=np.trapezoid(ktheta_web_pair*(F**2)*(ky**2), x); Den=0.5*np.trapezoid(alpha0*(Fp**2)*int_s2, x)
         return (Ub+Ue)/max(Den,1e-18)
     beta_guess=1.5*pi/max(b_root,1e-18); aL,aU=10.0,26.0; bL,bU=0.7*(pi/max(b_root,1e-18)),2.2*(pi/max(b_root,1e-18))
     A=np.linspace(aL,aU,7); B=np.linspace(bL,bU,19)
@@ -228,7 +235,7 @@ def eval_m3_Pcr_and_mode(vals, PPW=60, nx_min=1801, return_mode=True):
     N,D,(F1,F1p,F1pp,F2,F2p,F2pp) = build_ND(a_star, b_star)
     c1, c2 = (vec[0], vec[1])
     # Normalize mode shape (avoid arbitrary scaling)
-    norm = max(np.sqrt(np.trapz((c1*F1p + c2*F2p)**2, x)), 1e-18)
+    norm = max(np.sqrt(np.trapezoid((c1*F1p + c2*F2p)**2, x)), 1e-18)
     c1 /= norm; c2 /= norm
     F   = c1*F1 + c2*F2
     Fp  = c1*F1p + c2*F2p
@@ -252,7 +259,7 @@ def koiter_curves_from_mode(mode):
     A_f=mode["A_f"]; A_w=mode["A_w"]; alpha0=mode["alpha0"]; w_f=mode["w_f"]
     Pcr=mode["Pcr"]
     # Den2
-    Den2 = np.trapz(alpha0*(Fp**2)*(b/2.0), x)
+    Den2 = np.trapezoid(alpha0*(Fp**2)*(b/2.0), x)
     # k4 integrals
     A11=float(A_f[0,0]); A22=float(A_f[1,1]); A12=float(A_f[0,1]); A66=float(A_f[2,2])
     I_phi4    = 3.0*b/8.0
@@ -262,19 +269,19 @@ def koiter_curves_from_mode(mode):
                      (2*A12*(0.25)*(Fp**2)*(F**2)*I_phi2py2) +
                      (A22*(0.25)*F**4*I_py4) +
                      (2*A66*(F**2)*(Fp**2)*I_phi2py2) )
-    k4 = float(np.trapz(k4_int, x))
+    k4 = float(np.trapezoid(k4_int, x))
 
     # Linear compliance via equivalent EI
     EI_faces=A11*b*(H**2)/2.0; EI_webs=float(A_w[0,0])*(H**3)/6.0; EI_flange=2.0*(A11+float(A_w[0,0]))*w_f*(H**2)/2.0
     EI_total=EI_faces+EI_webs+EI_flange
-    fb = np.trapz((L-x)*x/np.maximum(EI_total,1e-18), x)
+    fb = np.trapezoid((L-x)*x/np.maximum(EI_total,1e-18), x)
 
     # Curves up to 1.5 Pcr
     P = np.linspace(0.0, 1.5*Pcr, 181)
     a = np.zeros_like(P); idx = P > Pcr
     if k4>1e-18 and Den2>1e-18:
         a[idx] = np.sqrt( ((P[idx]-Pcr) * Den2) / k4 )
-    theta_fac = np.sqrt( (1.0/L) * np.trapz( (F**2)*(ky**2), x) )
+    theta_fac = np.sqrt( (1.0/L) * np.trapezoid( (F**2)*(ky**2), x) )
     delta_lin = P*fb
     delta_loc = L*theta_fac*a
     delta_tot = delta_lin + delta_loc
@@ -306,38 +313,60 @@ def plot_load_deflection(case_label, Pcr, dcr, P, dlin, dloc, dtot, out_png):
     plt.title(f"Load–deflection — {case_label}")
     plt.tight_layout(); plt.savefig(out_png, dpi=180); plt.close()
 
-def save_deflection_grid_and_contour(x, b, F, case_label, xls_path, grid="100x50"):
+def plot_contour_on_ax(x, b, F, case_label, ax, grid="100x50"):
     # Build grid
     try:
         nx, ny = [int(s) for s in str(grid).lower().replace('x',' ').split()]
     except Exception:
         nx, ny = 100, 50
-    X = np.linspace(x[0], x[-1], nx)
+    X_lin = np.linspace(x[0], x[-1], nx)
     # for each X, local width is interpolated from b(x)
-    bX = np.interp(X, x, b)
-    Y = np.array([np.linspace(0.0, bX[i], ny) for i in range(nx)])  # (nx, ny)
-    FX = np.interp(X, x, F)  # (nx,)
-    # w(x,y)=F(x)*sin(pi*y/b(x))
-    W = np.zeros((nx, ny))
+    bX = np.interp(X_lin, x, b)
+    
+    # Create 2D grids (nx, ny)
+    X2d = np.zeros((nx, ny))
+    Y2d = np.zeros((nx, ny))
+    W   = np.zeros((nx, ny))
+    
+    FX = np.interp(X_lin, x, F)
+    
     for i in range(nx):
+        # Physics domain: y goes from 0 to b(x)
+        y_phys = np.linspace(0.0, bX[i], ny)
+        # Plotting domain: Symmetric about 0 => -b(x)/2 to +b(x)/2
+        y_plot = y_phys - bX[i]/2.0
+        
+        X2d[i, :] = X_lin[i]
+        Y2d[i, :] = y_plot
+        
         ky_i = pi/max(bX[i],1e-18)
-        W[i,:] = float(FX[i]) * np.sin(ky_i * Y[i,:])
+        # Mode shape calculation uses physics coordinate (0..b)
+        W[i, :] = float(FX[i]) * np.sin(ky_i * y_phys)
+
     # normalize for plotting
     maxabs = max(np.max(np.abs(W)), 1e-18)
     Wn = W / maxabs
 
-    # Save contour png
+    # Use pcolormesh for non-rectangular domain
+    pcm = ax.pcolormesh(X2d, Y2d, Wn, cmap='viridis', shading='gouraud')
+    
+    # Allow plot to fill the area (User requested specific size/organization)
+    # Removing 'equal' aspect so it fills the 4:3 frame instead of being a thin strip
+    ax.set_aspect('auto')
+    
+    ax.set_xlabel('x [m]')
+    ax.set_ylabel('y [m]')
+    ax.set_title(f"Mode contour — {case_label}")
+    return pcm, X_lin, Y2d, Wn, nx, ny
+
+def save_deflection_grid_and_contour(x, b, F, case_label, xls_path, grid="100x50"):
     out_png = Path(xls_path).with_name("Contour.png")
-    plt.figure(figsize=(7.2,3.8))
-    # build a rectangular grid for imshow: x by y normalized to [0,1] in width
-    extent=[X[0], X[-1], 0.0, 1.0]
-    # map y to normalized (0..1) per-section for display only
-    Yn = np.array([Y[i,:]/max(bX[i],1e-18) for i in range(nx)])
-    plt.imshow(Wn.T, origin='lower', aspect='auto', extent=extent, interpolation='bilinear')
-    plt.colorbar(label='w / max|w|')
-    plt.xlabel('x [m]'); plt.ylabel('y/b(x) [-]')
-    plt.title(f"Mode contour — {case_label}")
-    plt.tight_layout(); plt.savefig(out_png, dpi=180); plt.close()
+    fig, ax = plt.subplots(figsize=(7.2,3.8))
+    im, X, Y, Wn, nx, ny = plot_contour_on_ax(x, b, F, case_label, ax, grid=grid)
+    fig.colorbar(im, label='w / max|w|')
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=180)
+    plt.close(fig)
 
     # Save DeflectionGrid sheet
     rows=[]
@@ -388,7 +417,7 @@ def run_full(xls_path, core="m3", grid="100x50"):
     return {"P_cr": mode["Pcr"], "delta_cr": dcr, "load_deflection_plot": str(out_png_ld), "contour_plot": out_png_contour, "core":"m3"}
 
 # ---------------- SENS (OAT) ----------------
-def run_sens(xls_path, core="m2"):
+def run_sens(xls_path, core="m2", make_plot=True):
     xls=Path(xls_path)
     df_inputs=pd.read_excel(xls, sheet_name="Inputs"); vals0={r["Key"]: r["Value"] for _,r in df_inputs.iterrows()}
     if "core" in vals0: core=str(vals0["core"]).lower()
@@ -420,10 +449,11 @@ def run_sens(xls_path, core="m2"):
         P0 = eval_m2_Pcr(vals0)
     with pd.ExcelWriter(xls.with_name("M3_SENS_Results.xlsx"), mode="a", if_sheet_exists="replace") as writer:
         pd.DataFrame([{"baseline_P_cr [N]": float(P0), "core": core}]).to_excel(writer, sheet_name="SENS_Baseline", index=False)
-    return {"rows":len(rows), "core":core}
+    # Return df_out (rows) and P0 for GUI plotting
+    return {"rows":len(rows), "core":core, "df_results": df_out.to_dict(orient='records'), "baseline_Pcr": float(P0)}
 
 # ---------------- SOBOL ----------------
-def run_sobol(xls_path, core="m2"):
+def run_sobol(xls_path, core="m2", make_plot=True):
     xls=Path(xls_path)
     df_inputs=pd.read_excel(xls, sheet_name="Inputs"); vals={r["Key"]: r["Value"] for _,r in df_inputs.iterrows()}
     if "core" in vals: core=str(vals["core"]).lower()
@@ -466,12 +496,23 @@ def run_sobol(xls_path, core="m2"):
         ST[i]=0.5*np.mean((YA-YAB)**2)/V if V>0 else 0.0
 
     order=np.argsort(-ST); names_sorted=[names[i] for i in order]; S_sorted=S[order]; ST_sorted=ST[order]
+
     fig_path = xls.with_name(f"M3_Sobol_bars_core_{core}.png")
-    plt.figure(figsize=(7.8,4.6)); xloc=np.arange(len(names_sorted))
-    plt.bar(xloc-0.18, S_sorted, 0.36, label="S_i"); plt.bar(xloc+0.18, ST_sorted, 0.36, label="S_Ti")
-    plt.xticks(xloc, names_sorted, rotation=30, ha="right"); plt.ylabel("Sobol index"); plt.title(f"Sobol (core={core}, N={N_base})"); plt.legend()
-    plt.tight_layout(); plt.savefig(fig_path, dpi=160); plt.close()
-    return {"plot":str(fig_path), "core":core}
+    
+    if make_plot:
+        plt.figure(figsize=(7.8,4.6)); xloc=np.arange(len(names_sorted))
+        plt.bar(xloc-0.18, S_sorted, 0.36, label="S_i"); plt.bar(xloc+0.18, ST_sorted, 0.36, label="S_Ti")
+        plt.xticks(xloc, names_sorted, rotation=30, ha="right"); plt.ylabel("Sobol index"); plt.title(f"Sobol (core={core}, N={N_base})"); plt.legend()
+        plt.tight_layout(); plt.savefig(fig_path, dpi=160); plt.close()
+    
+    return {
+        "plot":str(fig_path), 
+        "core":core, 
+        "names_sorted": names_sorted, 
+        "S_sorted": S_sorted.tolist(), 
+        "ST_sorted": ST_sorted.tolist()
+    }
+
 
 # ---------------- CLI ----------------
 def main():

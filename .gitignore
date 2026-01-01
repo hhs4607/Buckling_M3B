@@ -1,23 +1,7 @@
-.idea/
-*.iml
-
-# Python
+venv/
 __pycache__/
 *.pyc
-
-# VS Code
-.vscode/
-
-# Jupyter
-.ipynb_checkpoints/
-
-# Env
-.env
-
-# Outputs
-results/
+*.xlsx
 *.png
-
-# OS
-Thumbs.db
+temp_gui_config.xlsx
 .DS_Store
