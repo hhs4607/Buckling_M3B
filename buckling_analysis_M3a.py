@@ -163,8 +163,77 @@ def fast_ab(Ktheta_root_per_m, b_root, k_y_root, build_ND, kappa_scale, return_v
         return float(bestP), float(bestA), float(bestB), (bestv if bestv is not None else np.array([1.0,0.0]))
     return float(bestP), float(bestA), float(bestB)
 
+# ---------------- M2 Koiter helper ----------------
+def calculate_m2_koiter_curves(Fx, x, b, h, H, ky, alpha0, Pcr, vals, A_f, A_w, D_f):
+    """
+    Calculate Koiter post-buckling curves for M2
+    Based on M2a save_Pdelta() function
+    Returns: P, delta_lin, delta_loc, delta_tot, dcr
+    """
+    L = float(vals["L"])
+    t_f = float(vals["t_face_total"])
+    w_f = float(vals["w_f"])
+
+    # Extract material properties
+    A11_face = float(A_f[0,0])
+    A11_web = float(A_w[0,0])
+
+    # Linear compliance (bending)
+    EI_faces = A11_face * b * (H**2) / 2.0
+    EI_webs = A11_web * (H**3) / 6.0
+    EI_total = EI_faces + EI_webs
+    fb = np.trapz((L - x) * x / np.maximum(EI_total, 1e-18), x)
+
+    # Mode slope F'(x)
+    Fp = np.gradient(Fx, x)
+
+    # Work slope
+    int_s2 = b / 2.0
+    C_work = np.trapz(alpha0 * (Fp**2) * int_s2, x) * 2.0
+
+    # Quartic stiffness (membrane stretching)
+    Df11 = float(D_f[0,0])
+    Df22 = float(D_f[1,1])
+    Df12 = float(D_f[0,1])
+    Df66 = float(D_f[2,2])
+
+    A11 = 12.0 * Df11 / (t_f * t_f)
+    A22 = 12.0 * Df22 / (t_f * t_f)
+    A12 = 12.0 * Df12 / (t_f * t_f)
+    A66 = 12.0 * Df66 / (t_f * t_f)
+
+    k4 = np.trapz(
+        0.5 * (
+            A11 * (3.0/32.0) * b * (Fp**4) +
+            2.0 * A12 * (1.0/16.0) * b * (Fp**2) * (Fx**2) * (ky**2) +
+            A22 * (3.0/32.0) * b * (Fx**4) * (ky**4) +
+            A66 * (1.0/8.0) * b * (Fp**2) * (Fx**2) * (ky**2)
+        ), x
+    )
+
+    # Amplitude factor
+    theta_fac = np.sqrt((1.0 / L) * np.trapz((Fx**2) * (ky**2), x))
+
+    # Koiter curves
+    P = np.linspace(0.0, 1.5*Pcr, 181)
+    a = np.zeros_like(P)
+    idx = P > Pcr
+
+    if k4 > 1e-18 and C_work > 1e-18:
+        a[idx] = np.sqrt(0.5 * C_work * (P[idx] - Pcr) / k4)
+
+    delta_lin = P * fb
+    delta_loc = L * theta_fac * a
+    delta_tot = delta_lin + delta_loc
+
+    # Critical deflection
+    dcr = float(np.interp(Pcr, P, delta_tot))
+
+    return P, delta_lin, delta_loc, delta_tot, dcr
+
 # ---------------- M2 (fast) Pcr only ----------------
 def eval_m2_Pcr(vals, PPW=30, nx_min=801):
+    """Original M2 function - returns only Pcr for backward compatibility"""
     L,x,b,h,H,ky,b_root = build_geometry(vals, PPW=PPW, nx_min=nx_min)
     Ef,Em,Gf,num,nuf,Vf = float(vals["Ef"]),float(vals["Em"]),float(vals["Gf"]),float(vals["num"]),float(vals["nuf"]),float(vals["Vf"])
     face_angles=[float(z) for z in str(vals["face_angles"]).split(",")] if str(vals.get("face_angles","")).strip()!="" else [0.0]
@@ -197,6 +266,102 @@ def eval_m2_Pcr(vals, PPW=30, nx_min=801):
         valsb=[P_of(a,beta) for beta in B]; m=min(valsb)
         if 0<m<Pbest: Pbest=m
     return float(Pbest)
+
+# ---------------- M2 with mode (for GUI plotting) ----------------
+def eval_m2_Pcr_with_mode(vals, PPW=30, nx_min=801, return_mode=True):
+    """
+    Enhanced M2 that returns mode shape and Koiter curves
+    Compatible with M3 API for GUI plotting
+    """
+    # Build geometry
+    L,x,b,h,H,ky,b_root = build_geometry(vals, PPW=PPW, nx_min=nx_min)
+
+    # Materials
+    Ef,Em,Gf,num,nuf,Vf = float(vals["Ef"]),float(vals["Em"]),float(vals["Gf"]),float(vals["num"]),float(vals["nuf"]),float(vals["Vf"])
+    face_angles=[float(z) for z in str(vals["face_angles"]).split(",")] if str(vals.get("face_angles","")).strip()!="" else [0.0]
+    web_angles =[float(z) for z in str(vals["web_angles"]).split(",")]  if str(vals.get("web_angles","")).strip()!=""  else [0.0]
+    t_f=float(vals["t_face_total"]); t_w=float(vals["t_web_total"])
+
+    # CLT
+    E1,E2,G12,nu12 = micromech_ud(Ef,Em,Gf,Em/(2*(1+num)),nuf,num,Vf)
+    A_f,B_f,D_f = ABD_from_layup(E1,E2,G12,nu12, face_angles, t_f)
+    A_w,B_w,D_w = ABD_from_layup(E1,E2,G12,nu12, web_angles,  t_w)
+    Df11,Df22,Df12,Df66 = float(D_f[0,0]),float(D_f[1,1]),float(D_f[0,1]),float(D_f[2,2])
+    Dw22 = float(D_w[1,1])
+
+    # Mapping
+    w_f=float(vals["w_f"]); t_fl=t_f+t_w
+    I_faces_panel=2.0*(b*t_f)*(H/2.0)**2; I_faces_flange=2.0*(w_f*t_fl)*(H/2.0)**2; I_webs=2.0*(t_w*h**3)/12.0
+    I_total=I_faces_panel+I_faces_flange+I_webs; alpha0=t_f*(H/2.0)/np.maximum(I_total,1e-18)*(L-x)
+
+    # Weights
+    int_s2=(b/2.0); int_sy2=(pi**2)/(2.0*np.maximum(b,1e-18)); int_syy2=(b/2.0)*(ky**4)
+    ktheta_web_pair=2.0*(4.0*Dw22/np.maximum(h,1e-12))
+
+    # Optimization with mode tracking
+    def P_of(a,beta):
+        expax=np.exp(-a*x); sinbx=np.sin(beta*x); cosbx=np.cos(beta*x)
+        F=expax*(x*sinbx); Fp=expax*(sinbx + x*beta*cosbx - a*x*sinbx)
+        Fpp=expax*(2*beta*cosbx - x*beta**2*sinbx - 2*a*(sinbx + x*beta*cosbx) + a**2*x*sinbx)
+        Ub=0.5*np.trapezoid(Df11*(Fpp**2)*int_s2 + 2*(Df12+2*Df66)*(-ky**2)*(Fpp*F)*(b/2.0) + Df22*(F**2)*int_syy2 + 4*Df66*(Fp**2)*int_sy2, x)
+        Ue=np.trapezoid(ktheta_web_pair*(F**2)*(ky**2), x); Den=0.5*np.trapezoid(alpha0*(Fp**2)*int_s2, x)
+        Pcr_val = (Ub+Ue)/max(Den,1e-18)
+        return Pcr_val, F
+
+    beta_guess=1.5*pi/max(b_root,1e-18); aL,aU=10.0,26.0; bL,bU=0.7*(pi/max(b_root,1e-18)),2.2*(pi/max(b_root,1e-18))
+    A=np.linspace(aL,aU,7); B=np.linspace(bL,bU,19)
+    Pbest=np.inf; best_F=None; best_alpha=None; best_beta=None
+
+    for a in A:
+        for beta in B:
+            P_val, F_val = P_of(a, beta)
+            if 0 < P_val < Pbest:
+                Pbest = P_val
+                best_F = F_val
+                best_alpha = a
+                best_beta = beta
+
+    Pcr = float(Pbest)
+
+    if not return_mode:
+        return Pcr
+
+    # Calculate Koiter curves
+    P, dlin, dloc, dtot, dcr = calculate_m2_koiter_curves(
+        best_F, x, b, h, H, ky, alpha0, Pcr, vals, A_f, A_w, D_f
+    )
+
+    # Normalize mode
+    norm = max(np.sqrt(np.trapz(best_F**2, x)), 1e-18)
+    Fn = best_F / norm
+
+    # Return in M3-compatible format
+    out = {
+        "Pcr": Pcr,
+        "dcr": dcr,
+        "alpha_star": float(best_alpha),
+        "beta_star": float(best_beta),
+        "lambda_x": float(2.0*pi/max(best_beta, 1e-18)),
+        "P": P,
+        "dlin": dlin,
+        "dloc": dloc,
+        "dtot": dtot,
+        "x": x,
+        "b": b,
+        "h": h,
+        "H": H,
+        "ky": ky,
+        "F": Fn,
+        "Fp": np.gradient(Fn, x),
+        "A_f": A_f,
+        "A_w": A_w,
+        "D_f": D_f,
+        "D_w": D_w,
+        "alpha0": alpha0,
+        "w_f": w_f,
+        "L": L
+    }
+    return out
 
 # ---------------- M3 Pcr + eigenvector ----------------
 def eval_m3_Pcr_and_mode(vals, PPW=60, nx_min=1801, return_mode=True):

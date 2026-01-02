@@ -1,7 +1,23 @@
+# venv / python cache
+.venv/
 venv/
 __pycache__/
 *.pyc
-*.xlsx
-*.png
-temp_gui_config.xlsx
 .DS_Store
+.idea/
+
+# outputs (generated results)
+outputs/
+*.xlsx
+*.csv
+
+# generated figures (optional)
+*.pdf
+*.svg
+
+# BUT keep assets images
+!assets/
+!assets/*.png
+!assets/*.jpg
+!assets/*.jpeg
+!assets/*.webp
