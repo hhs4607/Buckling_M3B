@@ -1,2 +1,7 @@
-.idea/
-*.iml
+venv/
+__pycache__/
+*.pyc
+*.xlsx
+*.png
+temp_gui_config.xlsx
+.DS_Store
