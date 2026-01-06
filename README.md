@@ -19,6 +19,14 @@ This tool supports:
 
 ---
 
+## Patched Updates
+- Patched GUI entry point: `gui_buckling_extended_FIXED.py`
+- M2 now includes full load-deflection curves; M3 full mode saves contour + deflection grid
+- `--core` selection is honored in SENS/SOBOL
+- Logos and manuals are bundled under `assets/`
+
+---
+
 ## Requirements
 - Python **3.8+**
 - pip
@@ -52,7 +60,7 @@ Option A) Run Script (Mac/Linux)
 - Run: `./run_gui.sh`
 
 Option B) Direct Python Run
-- Run: `python3 gui_buckling.py`
+- Run: `python3 gui_buckling_extended_FIXED.py`
 
 ---
 

@@ -6,6 +6,11 @@ __pycache__/
 .DS_Store
 .idea/
 
+# pyinstaller build outputs
+build/
+dist/
+*.spec
+
 # outputs (generated results)
 outputs/
 *.xlsx
@@ -21,3 +26,5 @@ outputs/
 !assets/*.jpg
 !assets/*.jpeg
 !assets/*.webp
+!assets/manuals/
+!assets/manuals/*.pdf

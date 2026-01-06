@@ -28,6 +28,9 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import re
+import os
+import sys
+import webbrowser
 
 # Try to import PIL for high-quality image scaling
 try:
@@ -47,6 +50,7 @@ from buckling_analysis_M3a import (
 )
 from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
+APP_VERSION = "v2.11"
 
 # ========== TOOLTIP CLASS ==========
 class ToolTip:
@@ -104,7 +108,7 @@ PARAM_TOOLTIPS = {
 class BucklingGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Composite double tapered box Beam Buckling Analysis")
+        self.root.title(f"Embraer BOX BEAM Buckling (E3B) Analysis Program ({APP_VERSION})")
 
         # Detect screen size and set window to 85% of screen
         screen_width = root.winfo_screenwidth()
@@ -121,7 +125,9 @@ class BucklingGUI:
 
         # Image asset paths (user can replace these)
         self.left_geom_img_path = str(BASE_DIR / "assets" / "geom_def_v2.png")  # geome: ...\assets\geom_def_v2.png
-        self.logo_banner_img_path = str(BASE_DIR / "assets" / "logos_v2.png")  # logo: ...\logos_v2.png
+        self.logo_banner_img_path = str(BASE_DIR / "assets" / "logos_v3.png")  # logo: ...\logos_v3.png
+        self.user_manual_path = self._resource_path(Path("assets") / "manuals" / "User_Manual.pdf")
+        self.theory_manual_path = self._resource_path(Path("assets") / "manuals" / "Theory_Manual.pdf")
 
         # Storage for results
         self.current_results = None
@@ -176,8 +182,46 @@ class BucklingGUI:
             print(f"Warning: Could not load image {path}: {e}")
             return None
 
+    def _resource_path(self, relative_path):
+        base_dir = Path(getattr(sys, "_MEIPASS", BASE_DIR))
+        return base_dir / Path(relative_path)
+
+    def _open_manual(self, manual_path, title):
+        try:
+            manual_path = Path(manual_path)
+            if not manual_path.exists():
+                messagebox.showerror("Manual Missing", f"{title} not found:\n{manual_path}")
+                return
+            if sys.platform.startswith("win"):
+                os.startfile(str(manual_path))
+            else:
+                webbrowser.open(manual_path.as_uri())
+        except Exception as exc:
+            messagebox.showerror("Open Manual Failed", f"{title}:\n{exc}")
+
+    def _add_manual_buttons(self, parent, row=1, column=0):
+        button_frame = ttk.Frame(parent)
+        button_frame.grid(row=row, column=column, sticky="e", pady=(6, 0))
+        user_btn = ttk.Button(
+            button_frame,
+            text="User Manual",
+            command=lambda: self._open_manual(self.user_manual_path, "User Manual"),
+            width=14,
+        )
+        user_btn.pack(side=tk.LEFT, padx=(0, 6))
+        theory_btn = ttk.Button(
+            button_frame,
+            text="Theory Manual",
+            command=lambda: self._open_manual(self.theory_manual_path, "Theory Manual"),
+            width=14,
+        )
+        theory_btn.pack(side=tk.LEFT)
+        ToolTip(user_btn, "Open User Manual (PDF)")
+        ToolTip(theory_btn, "Open Theory Manual (PDF)")
+        return button_frame
+
     def _create_header_block(self, parent, title_main, title_sub, desc_text,
-                             logo_max_h=80, wraplength=520):
+                             logo_max_h=120, wraplength=450):
         """
         FULL 탭과 동일한 규격(Header: 좌=Title/Desc, 우=Logo)을 생성.
         parent의 row=0, col=0에 grid로 배치해서 사용하게끔 구성.
@@ -192,7 +236,8 @@ class BucklingGUI:
         left.grid(row=0, column=0, sticky="nsew", padx=10, pady=8)
         left.columnconfigure(0, weight=1)
         left.rowconfigure(0, weight=1)  # 위(Title)
-        left.rowconfigure(1, weight=3)  # 아래(Description)
+        left.rowconfigure(1, weight=3)
+        left.rowconfigure(2, weight=0)  # 아래(Description)
 
         title_frame = ttk.Frame(left)
         title_frame.grid(row=0, column=0, sticky="w")
@@ -206,26 +251,35 @@ class BucklingGUI:
                                wraplength=wraplength, justify='left')
         desc_label.grid(row=1, column=0, sticky="nw", pady=(5, 0))
 
-        # ---- Col=1 (Logo) ----
+        spacer_frame = ttk.Frame(left)
+        spacer_frame.grid(row=2, column=0, sticky="ew")
+
+        # ---- Col=1 (Logo + Manuals) ----
         right = ttk.Frame(header_frame)
         right.grid(row=0, column=1, sticky="nsew", padx=10, pady=8)
         right.columnconfigure(0, weight=1)
         right.rowconfigure(0, weight=1)
+        right.rowconfigure(1, weight=0)
 
-        logo_label = ttk.Label(right, text="", anchor='center')
+        logo_container = ttk.Frame(right)
+        logo_container.grid(row=0, column=0, sticky="nsew")
+        logo_container.columnconfigure(0, weight=1)
+        logo_container.rowconfigure(0, weight=1)
+
+        logo_label = ttk.Label(logo_container, text="", anchor='center')
         logo_label.grid(row=0, column=0, sticky="nsew")
 
-        # 로고 로드 + 리사이즈 바인딩
+        # ?????? ?????? + ??????????? ????????
         logo_path = Path(self.logo_banner_img_path)
         if PIL_AVAILABLE and logo_path.exists():
-            # 초기 로드
+            # ?????? ??????
             photo = self._load_and_scale_image(str(logo_path), 520, logo_max_h)
             if photo:
                 logo_label.config(image=photo)
-                # ref 보관(가비지 컬렉션 방지)
+                # ref ?????(???????? ?????????????)
                 self._img_refs[f"logo_{id(parent)}"] = photo
 
-            # 창 크기 변경 시 자동 리사이즈 (debounced)
+            # ???????? ????????????? ??????????? (debounced)
             self._bind_resizable_image_debounced(
                 logo_label, str(logo_path), max_h=logo_max_h, side_padding=5, delay=60
             )
@@ -575,18 +629,24 @@ class BucklingGUI:
         spacer_frame = ttk.Frame(header_left)
         spacer_frame.grid(row=2, column=0, sticky="ew")
 
-        # Right column (col=1): Logo spanning all 3 rows
+        # Right column (col=1): Logo + Manuals
         logo_frame = ttk.Frame(header_frame)
         logo_frame.grid(row=0, column=1, rowspan=3, sticky="nsew", padx=10, pady=8)
         logo_frame.columnconfigure(0, weight=1)
         logo_frame.rowconfigure(0, weight=1)
+        logo_frame.rowconfigure(1, weight=0)
+
+        logo_container = ttk.Frame(logo_frame)
+        logo_container.grid(row=0, column=0, sticky="nsew")
+        logo_container.columnconfigure(0, weight=1)
+        logo_container.rowconfigure(0, weight=1)
 
         # Logo label (centered)
-        self.logo_banner_label = ttk.Label(logo_frame, text="", anchor='center')
+        self.logo_banner_label = ttk.Label(logo_container, text="", anchor='center')
         self.logo_banner_label.grid(row=0, column=0, sticky="nsew")
 
         # Load logo image
-        logo_path = BASE_DIR / "assets" / "logos_v2.png"
+        logo_path = BASE_DIR / "assets" / "logos_v3.png"
         if PIL_AVAILABLE and logo_path.exists():
             # 초기 렌더(실제 폭 기준)
             self.root.after(50, lambda: self._set_image_fit_to_container(self.logo_banner_label,
@@ -654,11 +714,22 @@ class BucklingGUI:
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-        # ========== Row 4: Export buttons ==========
-        export_frame = ttk.Frame(parent)
-        export_frame.grid(row=4, column=0, pady=8)
+        # ========== Row 4: Bottom buttons (3 zones) ==========
+        bottom_frame = ttk.Frame(parent)
+        bottom_frame.grid(row=4, column=0, sticky="ew", pady=8)
+        bottom_frame.columnconfigure(0, weight=1)
+        bottom_frame.columnconfigure(1, weight=0)
+        bottom_frame.columnconfigure(2, weight=1)
+        bottom_frame.columnconfigure(3, weight=0)
+
+        export_frame = ttk.Frame(bottom_frame)
+        export_frame.grid(row=0, column=1)
         ttk.Button(export_frame, text="📊 Export Plot", command=self.export_plot).pack(side=tk.LEFT, padx=5)
         ttk.Button(export_frame, text="📄 Export Results", command=self.export_results).pack(side=tk.LEFT, padx=5)
+
+        manual_frame = ttk.Frame(bottom_frame)
+        manual_frame.grid(row=0, column=3, sticky="e")
+        self._add_manual_buttons(manual_frame, row=0, column=0)
 
     # ========== TAB 2: SENS ANALYSIS (Simplified) ==========
     def create_sens_tab(self):
@@ -673,7 +744,7 @@ class BucklingGUI:
 
         left = ttk.Frame(content)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-        right = ttk.Frame(content)
+        right = ttk.Frame(content, padding="5")
         right.grid(row=0, column=1, sticky="nsew")
 
         # left: top(list) / bottom(controls)
@@ -780,8 +851,6 @@ class BucklingGUI:
             title_main="Double Tapered Composite Beam: OAT Sensitivity Analysis",
             title_sub="One-at-a-time Parameter Sweep",
             desc_text=desc_text,
-            logo_max_h=70,
-            wraplength=520
         )
 
         assumptions_frame = ttk.LabelFrame(right, text="Sensitivity Analysis: Description", padding="8")
@@ -821,7 +890,7 @@ class BucklingGUI:
 
         left = ttk.Frame(content)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-        right = ttk.Frame(content)
+        right = ttk.Frame(content, padding="5")
         right.grid(row=0, column=1, sticky="nsew")
 
         left.columnconfigure(0, weight=1)
@@ -949,8 +1018,6 @@ class BucklingGUI:
             title_main="Double Tapered Composite Beam: Sobol Uncertainty Quantification",
             title_sub="Variance-based Global Sensitivity (S₁, Sᵀ)",
             desc_text=desc_text,
-            logo_max_h=70,
-            wraplength=520
         )
 
         assumptions_frame = ttk.LabelFrame(right, text="Sobol UQ: Description", padding="8")
