@@ -148,10 +148,10 @@
 
 ## 19. Deployment
 
-- [ ] 19.1 Deploy backend to Railway (Docker build, environment variables, health check)
-- [ ] 19.2 Deploy frontend to Vercel (connect repo, set NEXT_PUBLIC_API_URL, verify build)
-- [ ] 19.3 Verify CORS: frontend → backend API calls work in production
-- [ ] 19.4 Verify SSE: long-running sensitivity/sobol streams work end-to-end in production
+- [x] 19.1 Deploy backend to Railway (Docker build, environment variables, health check)
+- [x] 19.2 Deploy frontend to Vercel (connect repo, set NEXT_PUBLIC_API_URL, verify build)
+- [x] 19.3 Verify CORS: frontend → backend API calls work in production
+- [x] 19.4 Verify SSE: long-running sensitivity/sobol streams work end-to-end in production
 
 ## 20. End-to-End Verification
 
