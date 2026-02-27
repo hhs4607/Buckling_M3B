@@ -28,3 +28,14 @@ outputs/
 !assets/*.webp
 !assets/manuals/
 !assets/manuals/*.pdf
+
+# Frontend (Next.js)
+frontend/node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+
+# Claude Code personal config
+.claude/
+
+# Session memory (personal notes, not source code)
+memory/
